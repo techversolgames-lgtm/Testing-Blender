@@ -1,9 +1,39 @@
 .app {
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  width: 100%;
+  display: flex;
+  width: 100vw;
   height: 100vh;
   overflow: hidden;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 20%, #bae6fd 50%, #ddd6fe 80%, #fce7f3 100%);
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Optional: Add a subtle pattern overlay */
+.app::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 40% 20%, rgba(236, 72, 153, 0.05) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app > * {
+  position: relative;
+  z-index: 1;
 }
 
 @media (max-width: 768px) {

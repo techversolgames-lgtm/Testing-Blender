@@ -15,6 +15,16 @@ function ParameterControl({ param, value, onChange }) {
     if (param.type === 'bool') return false;
     if (param.type === 'string') return '';
     if (param.type === 'float_array') return new Array(param.length || 3).fill(0);
+    // Check if int with 0-1 range (boolean disguised as int)
+    // Only treat as boolean if BOTH original_min and original_max are exactly 0 and 1
+    if (param.type === 'int' && 
+        typeof param.original_min === 'number' && 
+        typeof param.original_max === 'number' &&
+        param.original_min === 0 && 
+        param.original_max === 1) {
+      return 0; // Return 0 (unchecked) for boolean-like integers
+    }
+    // For regular integers, return the minimum value or 0
     return param.soft_min ?? param.min ?? 0;
   }
 
@@ -30,8 +40,44 @@ function ParameterControl({ param, value, onChange }) {
   const displayName = param.display_name || param.name;
 
   const renderControl = () => {
+    // Check if this is a boolean disguised as int (EXACTLY 0-1 range)
+    // Must be type 'int' AND have original_min/max defined AND exactly 0-1
+    const isBooleanInt = param.type === 'int' && 
+                         typeof param.original_min === 'number' && 
+                         typeof param.original_max === 'number' &&
+                         param.original_min === 0 && 
+                         param.original_max === 1;
+    
+    // Debug logging (you can remove this later)
+    if (param.type === 'int') {
+      console.log(`[ParameterControl] "${displayName}":`, {
+        type: param.type,
+        original_min: param.original_min,
+        original_max: param.original_max,
+        isBooleanInt: isBooleanInt,
+        min: param.min,
+        max: param.max
+      });
+    }
+    
+    if (isBooleanInt) {
+      return (
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={Boolean(localValue)}
+            onChange={(e) => handleChange(e.target.checked ? 1 : 0)}
+            className="checkbox-input"
+          />
+          <span className="checkbox-text">
+            {Boolean(localValue) ? 'Enabled' : 'Disabled'}
+          </span>
+        </label>
+      );
+    }
+    
     if (param.type === 'float' || param.type === 'int') {
-      const step = param.type === 'int' ? 1 : 0.001;
+      const step = param.type === 'int' ? 1 : 0.1;
       
       return (
         <div className="control-inputs">

@@ -19,7 +19,9 @@ function App() {
     roughness: 0.8,
     showGrid: true,
     showAxes: true,
-    background: '#f6f6f6'
+    background: '#f6f6f6',
+    autoRotate: false,       // ? Auto-rotate OFF by default
+    rotationSpeed: 1.0       // Rotation speed (if enabled)
   });
 
   useEffect(() => {

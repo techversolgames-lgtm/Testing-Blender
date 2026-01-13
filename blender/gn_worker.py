@@ -88,15 +88,38 @@ def _schema_for_modifier(mod):
         item['display_name'] = name_mapping.get(k, k)
         item['identifier'] = k
 
+        # Get original Blender UI metadata
         ui = None
+        original_min = None
+        original_max = None
         try:
             rna_ui = mod.get('_RNA_UI')
             if isinstance(rna_ui, dict) and k in rna_ui:
                 ui = rna_ui[k]
+                if 'min' in ui:
+                    original_min = ui['min']
+                if 'max' in ui:
+                    original_max = ui['max']
         except Exception:
             ui = None
         
-        if ui:
+        # Store the original Blender range for scaling
+        if item['type'] in ['float', 'int']:
+            # Store original range for later conversion
+            item['original_min'] = original_min if original_min is not None else 0
+            item['original_max'] = original_max if original_max is not None else 1
+            
+            # Override with 0-100 range for UI
+            item['min'] = 0
+            item['max'] = 100
+            item['soft_min'] = 0
+            item['soft_max'] = 100
+            
+            # Add description if available
+            if ui and 'description' in ui:
+                item['description'] = ui['description']
+        elif ui:
+            # For non-numeric types (bool, string, etc), just copy the metadata as-is
             for key in ("min", "max", "soft_min", "soft_max", "description"):
                 if key in ui:
                     item[key] = ui[key]
@@ -110,6 +133,9 @@ def _apply_values(mod, values: dict):
     print(f"[DEBUG] Received values to apply: {values}", file=sys.stderr)
     print(f"[DEBUG] Available modifier keys: {list(mod.keys())}", file=sys.stderr)
     
+    # Get the RNA UI data for range information
+    rna_ui = mod.get('_RNA_UI', {})
+    
     applied_count = 0
     for k, v in values.items():
         if k not in mod.keys():
@@ -120,17 +146,42 @@ def _apply_values(mod, values: dict):
         old_value = cur
         try:
             if isinstance(cur, float):
-                mod[k] = float(v)
-                print(f"[DEBUG] Applied '{k}': {old_value} -> {float(v)}", file=sys.stderr)
+                # Scale from 0-100 UI range to original Blender range
+                ui_data = rna_ui.get(k, {})
+                original_min = ui_data.get('min', 0.0)
+                original_max = ui_data.get('max', 1.0)
+                
+                # Convert: 0-100 -> original_min to original_max
+                scaled_value = original_min + (float(v) / 10.0) * (original_max - original_min)
+                mod[k] = scaled_value
+                print(f"[DEBUG] Applied '{k}': {old_value} -> {scaled_value} (UI: {v}, range: {original_min}-{original_max})", file=sys.stderr)
+                
             elif isinstance(cur, int):
-                mod[k] = int(v)
-                print(f"[DEBUG] Applied '{k}': {old_value} -> {int(v)}", file=sys.stderr)
+                # Check if this is actually a boolean disguised as int (0 or 1)
+                ui_data = rna_ui.get(k, {})
+                original_min = ui_data.get('min', 0)
+                original_max = ui_data.get('max', 100)
+                
+                # If range is 0-1, treat as boolean
+                if original_min == 0 and original_max == 1:
+                    # This is a boolean checkbox
+                    mod[k] = 1 if bool(v) else 0
+                    print(f"[DEBUG] Applied '{k}': {old_value} -> {mod[k]} (boolean as int, UI: {v})", file=sys.stderr)
+                else:
+                    # Scale from 0-100 UI range to original Blender range
+                    scaled_value = int(original_min + (float(v) / 100.0) * (original_max - original_min))
+                    mod[k] = scaled_value
+                    print(f"[DEBUG] Applied '{k}': {old_value} -> {scaled_value} (UI: {v}, range: {original_min}-{original_max})", file=sys.stderr)
+                
             elif isinstance(cur, str):
                 mod[k] = str(v)
                 print(f"[DEBUG] Applied '{k}': {old_value} -> {v}", file=sys.stderr)
+                
             elif isinstance(cur, bool):
+                # True boolean type
                 mod[k] = bool(v)
-                print(f"[DEBUG] Applied '{k}': {old_value} -> {v}", file=sys.stderr)
+                print(f"[DEBUG] Applied '{k}': {old_value} -> {bool(v)} (boolean)", file=sys.stderr)
+                
             else:
                 if hasattr(cur, "__len__"):
                     arr = list(v)
@@ -145,6 +196,16 @@ def _apply_values(mod, values: dict):
             print(f"[DEBUG] Failed to apply '{k}': {e}", file=sys.stderr)
     
     print(f"[DEBUG] Successfully applied {applied_count}/{len(values)} values", file=sys.stderr)
+    
+    # CRITICAL: Force Blender to re-evaluate the Geometry Nodes
+    # This ensures the modifier actually updates with the new values
+    if applied_count > 0:
+        print(f"[DEBUG] Forcing depsgraph update...", file=sys.stderr)
+        # Mark the modifier as needing update
+        mod.id_data.update_tag()
+        # Force update of the entire view layer
+        bpy.context.view_layer.update()
+        print(f"[DEBUG] Depsgraph updated!", file=sys.stderr)
 
 
 def _mesh_to_binary(eval_obj):

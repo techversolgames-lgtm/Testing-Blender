@@ -1,20 +1,44 @@
-import React from 'react';
-import { Canvas } from '@react-three/fiber';
+import React, { useRef } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Grid, GizmoHelper, GizmoViewport } from '@react-three/drei';
 import DynamicMesh from './DynamicMesh';
 import './Scene3D.css';
+
+// Auto-rotation component
+function AutoRotate({ enabled, speed = 0.5 }) {
+  const controlsRef = useRef();
+  
+  useFrame(() => {
+    if (enabled && controlsRef.current) {
+      controlsRef.current.autoRotate = true;
+      controlsRef.current.autoRotateSpeed = speed;
+    } else if (controlsRef.current) {
+      controlsRef.current.autoRotate = false;
+    }
+  });
+  
+  return <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.05} />;
+}
 
 function Scene3D({ meshData, viewerSettings = {} }) {
   const {
     showGrid = true,
     showAxes = true,
-    background = '#f6f6f6'
+    background = '#f6f6f6',
+    autoRotate = false,  // Auto-rotate OFF by default
+    rotationSpeed = 1.0  // Rotation speed
   } = viewerSettings;
 
   return (
     <div className="scene-container">
       <Canvas
-        camera={{ position: [2, 2, 2], fov: 60, near: 0.01, far: 1000 }}
+        camera={{ 
+          position: [3, 3, 3],  // Isometric view: X-right, Y-back, Z-up
+          fov: 50,
+          near: 0.1, 
+          far: 1000,
+          up: [0, 0, 1]         // Z-axis is UP (standard 3D viewport)
+        }}
         gl={{ antialias: true }}
       >
         <color attach="background" args={[background]} />
@@ -37,17 +61,18 @@ function Scene3D({ meshData, viewerSettings = {} }) {
             fadeStrength={1}
             followCamera={false}
             infiniteGrid={true}
+            rotation={[Math.PI / 2, 0, 0]}  // Rotate grid to XY plane (Z-up)
           />
         )}
 
         <DynamicMesh meshData={meshData} viewerSettings={viewerSettings} />
 
-        <OrbitControls makeDefault />
+        <AutoRotate enabled={autoRotate} speed={rotationSpeed} />
 
         {showAxes && (
           <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
             <GizmoViewport
-              axisColors={['#ff4444', '#44ff44', '#4444ff']}
+              axisColors={['#ff4444', '#44ff44', '#4444ff']}  // Red=X, Green=Y, Blue=Z
               labelColor="white"
             />
           </GizmoHelper>
